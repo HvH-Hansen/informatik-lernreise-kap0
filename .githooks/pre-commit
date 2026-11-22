@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# DSGVO- & Hygiene-Schutz vor jedem Commit
+set -e
+
+STAGED=$(git diff --cached --name-only)
+if printf '%s\n' "$STAGED" | grep -E '(^|/)\.env($|\.)|^Schuelerdaten/|\.(csv|xlsx)$' >/dev/null 2>&1; then
+  echo "[DSGVO-STOPP] Sensible Dateien (.env*, Schuelerdaten/, *.csv, *.xlsx) dürfen nicht committet werden!" >&2
+  exit 1
+fi

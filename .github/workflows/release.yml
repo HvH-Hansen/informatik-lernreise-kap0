@@ -1,0 +1,93 @@
+name: Tag & GitHub Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Version prüfen, Tag & Release erstellen
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
+
+    steps:
+      - name: Repository auschecken (inkl. Tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: VERSION und CHANGELOG.md prüfen
+        id: meta
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          ver = Path("VERSION").read_text(encoding="utf-8").strip()
+          if not re.fullmatch(r"\d+\.\d+\.\d+", ver):
+              print(f"Ungültige VERSION: {ver!r}", file=sys.stderr)
+              sys.exit(1)
+
+          tag = f"v{ver}"
+          tag_exists = subprocess.run(
+              ["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
+              stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL,
+          ).returncode == 0
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={ver}\n")
+              out.write(f"tag={tag}\n")
+              out.write(f"create_release={'false' if tag_exists else 'true'}\n")
+
+          if tag_exists:
+              print(f"Tag {tag} existiert bereits – kein neues Release nötig.")
+              sys.exit(0)
+
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          header_re = re.compile(rf"^## \[{re.escape(ver)}\](?: .*)?$", re.MULTILINE)
+          match = header_re.search(changelog)
+          if not match:
+              print(f"CHANGELOG.md enthält keinen Abschnitt für [{ver}]!", file=sys.stderr)
+              sys.exit(1)
+
+          rest = changelog[match.end():]
+          end_match = re.search(r"^(?:## \[|<!-- AUTO-CHANGELOG:END -->)", rest, re.MULTILINE)
+          notes_body = (rest[:end_match.start()] if end_match else rest).strip()
+          if not notes_body:
+              print(f"Release Notes für [{ver}] in CHANGELOG.md sind leer!", file=sys.stderr)
+              sys.exit(1)
+
+          notes = f"{match.group(0)}\n\n{notes_body}\n"
+          Path("RELEASE_NOTES.md").write_text(notes, encoding="utf-8")
+          print(f"Release Notes für {tag} vorbereitet.")
+          PY
+
+      - name: Annotierten Tag erstellen und pushen
+        if: steps.meta.outputs.create_release == 'true'
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
+
+      - name: GitHub Release veröffentlichen
+        if: steps.meta.outputs.create_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Informatik Lernreise Kapitel 0 ${{ steps.meta.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ startsWith(steps.meta.outputs.version, '0.') }}

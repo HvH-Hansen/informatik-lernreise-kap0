@@ -1,0 +1,17 @@
+Mediatown – Informatik Lernreise Kapitel 0 (Klasse 5/6)
+Copyright (c) 2025-2026 HvH-Hansen (Hermann-von-Helmholtz-Realschule Wuppertal)
+
+Dieses Produkt wird unter der MIT-Lizenz veröffentlicht (siehe Datei LICENSE).
+
+Verwendete Drittanbieter-Bibliotheken und Schriftarten (Laufzeit / CDN):
+- GSAP (GreenSock Animation Platform) via jsDelivr CDN
+  Standard "No Charge" GreenSock License (https://gsap.com/standard-license/)
+- Lottie-Web (`lottie-web`) via jsDelivr CDN
+  MIT License
+- Google Fonts: `Lexend` & `Fredoka`
+  SIL Open Font License 1.1 (OFL-1.1)
+
+Optionales Backend:
+- Google Apps Script / Google Sheets (`google_apps_script/Code.gs`) zur
+  schulischen Auswertung und Spielstand-Synchronisation im eigenen Google-Konto
+  der Lehrkraft.
