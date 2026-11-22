@@ -1,6 +1,6 @@
 # Google Sheets Anbindung einrichten (einmalig ca. 2 Minuten)
 
-Damit alle Auswertungen der Kinder automatisch zentral in einer Google-Tabelle landen (ohne JSON-Upload), richte einmalig die kostenlose Apps-Script-Brücke ein:
+Damit alle Auswertungen der Kinder automatisch zentral in einer Google-Tabelle landen (ohne JSON-Upload) **und Spielstände an Schul-PCs später wieder geladen werden können**, richte einmalig die kostenlose Apps-Script-Brücke ein:
 
 1. **Google-Tabelle anlegen**
    - Öffne [Google Sheets](https://sheets.google.com) und erstelle eine neue leere Tabelle (z. B. `Informatik 5-6 – Lernreise Kapitel 0`).
@@ -15,7 +15,7 @@ Damit alle Auswertungen der Kinder automatisch zentral in einer Google-Tabelle l
    - Klicke links auf das Zahnrad neben *Typ auswählen* und wähle **Web-App**.
    - Stelle ein:
      - **Ausführen als:** `Ich` (dein Google-Konto)
-     - **Zugriff haben:** `Jeder` *(wichtig, damit die Browser der Schülerinnen und Schüler ohne Google-Login abgeben dürfen)*
+     - **Zugriff haben:** `Jeder` *(wichtig, damit die Browser der Schülerinnen und Schüler ohne Google-Login speichern und laden dürfen)*
    - Klicke auf **Bereitstellen**, bestätige einmalig den Zugriff auf dein Tabellenblatt und kopiere die angezeigte **Web-App-URL** (beginnt mit `https://script.google.com/macros/s/.../exec`).
 
 4. **URL in `config.js` eintragen**
@@ -31,4 +31,15 @@ Damit alle Auswertungen der Kinder automatisch zentral in einer Google-Tabelle l
    - Wenn du die Datei lokal geändert hast, führe `deploy_to_github.ps1` aus (oder speichere den Commit direkt im GitHub-Browser).
 
 5. **Fertig!**
-   - Sobald ein Kind eine Station schließt (automatischer Zwischenstand) oder im Tab **Abgeben** auf **„☁️ Ergebnisse an Lehrkraft senden“** klickt, erscheint bzw. aktualisiert sich die Zeile dieses Kindes automatisch im Tabellenblatt **Übersicht** – ohne doppelte Zeilen.
+   - Im Tabellenblatt **Übersicht** siehst du für jedes Kind alle 6 Stationen, Stempel und Sterne.
+   - Im zweiten Tabellenblatt **Spielstaende** werden automatisch die vollständigen Zwischenstände gesichert – meldet sich ein Kind eine Woche später an einem anderen Schul-PC wieder mit `Klasse + Vorname + 1. Buchstabe Nachname` an, wird sein bisheriger Spielstand automatisch wiederhergestellt.
+
+---
+
+## Update auf Cloud-Spielstand (wenn die Web-App schon eingerichtet war)
+
+Falls du `Code.gs` schon früher bereitgestellt hast, musst du die URL in `config.js` **nicht** ändern – aktualisiere einfach die bestehende Bereitstellung:
+
+1. In deiner Google-Tabelle auf **Erweiterungen → Apps Script** gehen, den Code durch das neue `google_apps_script/Code.gs` ersetzen und speichern (`Strg + S`).
+2. Rechts oben auf **Bereitstellen → Bereitstellungen verwalten** klicken.
+3. Bei deiner aktiven Bereitstellung auf das **Stift-Symbol (Bearbeiten)** klicken, unter **Version** auf **Neue Version** stellen und auf **Bereitstellen** klicken. Fertig!
