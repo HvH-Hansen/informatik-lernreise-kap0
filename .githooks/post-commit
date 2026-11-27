@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Übernimmt automatisch im commit-msg-Hook gestagte Versions-/Changelog-Dateien direkt in denselben Commit
+set -e
+
+MARKER=$(git rev-parse --git-path HVH_BUMP_PENDING)
+if [ -f "$MARKER" ]; then
+  rm -f "$MARKER"
+  if ! git diff --cached --quiet; then
+    git commit --amend --no-edit --no-verify
+  fi
+fi

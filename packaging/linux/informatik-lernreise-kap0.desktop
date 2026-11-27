@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Informatik Lernreise Kapitel 0
+GenericName=Interaktive Informatik-Lernreise (Klasse 5/6)
+Comment=Mediatown – 6 Lernstationen mit Google-Sheets-Auswertung & Offline-Modus
+Exec=/usr/bin/informatik-lernreise-kap0
+Icon=informatik-lernreise-kap0
+Terminal=false
+Categories=Education;
+Keywords=Schule;Informatik;Lernreise;Mediatown;
+StartupNotify=true

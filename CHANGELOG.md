@@ -5,6 +5,18 @@ Alle nennenswerten Änderungen an der **Informatik Lernreise Kapitel 0** werden 
 Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), und dieses Projekt folgt [Semantic Versioning 2.0.0](https://semver.org/lang/de/) im Vorab-Stadium (`0.y.z`: neue Funktionsblöcke erhöhen `minor`, Fehlerbehebungen und Dokumentations-Updates erhöhen `patch`).
 
 <!-- AUTO-CHANGELOG:START -->
+## [0.4.0] - 2026-11-27
+
+### Hinzugefügt
+- **Öffnung für Kollegium & eigene Instanzen (`ANLEITUNG_Kollegium_Einrichtung.md`, `config.example.js`, `README.md`, `CONTRIBUTING.md`):**
+  - Schritt-für-Schritt-Anleitung für Kolleginnen und Kollegen: eigenen GitHub-Fork anlegen, GitHub Pages aktivieren, Google Sheets (`Übersicht` & `Spielstaende`) ohne JSON-Auswertung einrichten und sicher betreiben.
+  - Neutrale Vorlage `config.example.js` als Basis für eigene Instanzen und alle Installationspakete.
+- **Lokale Nutzung & Cross-OS-Installationspakete (`Start_Lernreise.bat`, `Start_Lernreise.command`, `scripts/serve_local.py`, `scripts/build_packages.py`, `packaging/`):**
+  - Lokaler Webserver `scripts/serve_local.py` (`127.0.0.1`, `Cache-Control: no-store` für `config.js`, `--selftest`) sowie 1-Klick-Starter für Windows, macOS und Linux inkl. Browser-Direktstart-Fallback ohne Python.
+  - Deterministischer Cross-OS-Paket-Builder für Windows (`.zip`, Inno-Setup `.iss`), Linux (`.deb`, `.tar.gz`, `.tar.xz`, `.spec`, `PKGBUILD`, `.desktop`), macOS (`.app`-Bundle in `.tar.gz`/`.zip`, `.dmg`/`.pkg` via CI), Quellarchive und `SHA256SUMS.txt` – jeweils mit neutraler `config.js` (`endpointUrl: ''`) ohne persönliche URLs.
+- **Automatisierte Versionierung, Git-Hooks & Release-Pipeline (`scripts/release_manager.py`, `.githooks/`, `.github/workflows/release.yml`, `tests/test_release_and_packages.py`):**
+  - Automatische SemVer-/Changelog-Fortschreibung über `commit-msg`/`post-commit`-Hooks und Multi-OS-GitHub-Actions-Release-Workflow.
+
 ## [0.3.0] - 2026-11-22
 
 ### Hinzugefügt

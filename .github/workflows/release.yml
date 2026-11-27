@@ -1,4 +1,4 @@
-name: Tag & GitHub Release
+name: Auto-Version, Changelog & Cross-OS Release
 
 on:
   push:
@@ -10,84 +10,220 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Version prüfen, Tag & Release erstellen
+  version-and-changelog:
+    name: Versionierung, Changelog & Selftest
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
 
     steps:
-      - name: Repository auschecken (inkl. Tags)
+      - name: Repository auschecken (volle Historie)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: VERSION und CHANGELOG.md prüfen
-        id: meta
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version & CHANGELOG.md pro Commit prüfen/aktualisieren
+        id: bump
         run: |
-          python3 - <<'PY'
-          import os
-          import re
-          import subprocess
-          import sys
-          from pathlib import Path
-
-          ver = Path("VERSION").read_text(encoding="utf-8").strip()
-          if not re.fullmatch(r"\d+\.\d+\.\d+", ver):
-              print(f"Ungültige VERSION: {ver!r}", file=sys.stderr)
-              sys.exit(1)
-
-          tag = f"v{ver}"
-          tag_exists = subprocess.run(
-              ["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
-              stdout=subprocess.DEVNULL,
-              stderr=subprocess.DEVNULL,
-          ).returncode == 0
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write(f"version={ver}\n")
-              out.write(f"tag={tag}\n")
-              out.write(f"create_release={'false' if tag_exists else 'true'}\n")
-
-          if tag_exists:
-              print(f"Tag {tag} existiert bereits – kein neues Release nötig.")
-              sys.exit(0)
-
-          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-          header_re = re.compile(rf"^## \[{re.escape(ver)}\](?: .*)?$", re.MULTILINE)
-          match = header_re.search(changelog)
-          if not match:
-              print(f"CHANGELOG.md enthält keinen Abschnitt für [{ver}]!", file=sys.stderr)
-              sys.exit(1)
-
-          rest = changelog[match.end():]
-          end_match = re.search(r"^(?:## \[|<!-- AUTO-CHANGELOG:END -->)", rest, re.MULTILINE)
-          notes_body = (rest[:end_match.start()] if end_match else rest).strip()
-          if not notes_body:
-              print(f"Release Notes für [{ver}] in CHANGELOG.md sind leer!", file=sys.stderr)
-              sys.exit(1)
-
-          notes = f"{match.group(0)}\n\n{notes_body}\n"
-          Path("RELEASE_NOTES.md").write_text(notes, encoding="utf-8")
-          print(f"Release Notes für {tag} vorbereitet.")
+          python - <<'PY'
+          import json, os, subprocess, sys
+          out = subprocess.check_output(
+              [sys.executable, "scripts/release_manager.py", "--action", "bump", "--from-git", "--json"],
+              text=True,
+          )
+          data = json.loads(out)
+          ver = data["version"]
+          print("Release-Manager-Ergebnis:", data)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"version={ver}\n")
           PY
 
-      - name: Annotierten Tag erstellen und pushen
-        if: steps.meta.outputs.create_release == 'true'
+      - name: Sync, Unit-Tests, Starter-Selftest & Paket-Verifikation
+        run: |
+          python scripts/release_manager.py --action sync
+          python -m unittest discover -s tests -v
+          python scripts/serve_local.py --selftest
+          python scripts/build_packages.py --clean --verify
+
+      - name: Geänderte Versions- & Changelog-Dateien committen und taggen
         env:
-          TAG: ${{ steps.meta.outputs.tag }}
+          VER: ${{ steps.bump.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "${TAG}"
 
-      - name: GitHub Release veröffentlichen
-        if: steps.meta.outputs.create_release == 'true'
+          if [ -n "$(git status --porcelain)" ]; then
+            git add VERSION CHANGELOG.md README.md SECURITY.md scripts/ packaging/
+            git commit -m "chore(release): v${VER} [skip ci]"
+            git push origin HEAD:main
+          fi
+
+          if ! git rev-parse "v${VER}" >/dev/null 2>&1; then
+            git tag -a "v${VER}" -m "Release v${VER}"
+            git push origin "v${VER}"
+          fi
+
+  build-linux-and-cross:
+    name: Cross-OS Pakete & Debian (.deb) bauen
+    needs: version-and-changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version-and-changelog.outputs.version }}
+
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Alle Pakete & Archive bauen und verifizieren
+        run: |
+          python scripts/build_packages.py --clean --verify
+
+      - name: Debian-Paket (.deb) mit dpkg-deb validieren
+        env:
+          VER: ${{ needs.version-and-changelog.outputs.version }}
+        run: |
+          DEB="dist/v${VER}/informatik-lernreise-kap0_${VER}_all.deb"
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB" | head -n 30
+
+      - name: Cross-OS Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-cross-os
+          path: dist/v${{ needs.version-and-changelog.outputs.version }}/*
+
+  build-macos-native:
+    name: macOS App-Bundle (.dmg & .pkg) bauen
+    needs: version-and-changelog
+    runs-on: macos-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version-and-changelog.outputs.version }}
+
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: App-Bundle stagen sowie .dmg (APFS) & .pkg erzeugen
+        env:
+          VER: ${{ needs.version-and-changelog.outputs.version }}
+        run: |
+          mkdir -p stage_macos macos_out
+          python scripts/build_packages.py --macos-stage-dir stage_macos --output-dir build_tmp
+
+          mkdir -p stage_dmg
+          cp -R "stage_macos/Informatik Lernreise Kap0.app" stage_dmg/
+          ln -s /Applications stage_dmg/Applications
+          hdiutil create \
+            -volname "Informatik Lernreise Kap0 v${VER}" \
+            -srcfolder stage_dmg \
+            -ov -format UDZO \
+            -fs APFS \
+            "macos_out/informatik-lernreise-kap0-v${VER}-macos-apfs.dmg"
+
+          pkgbuild \
+            --component "stage_macos/Informatik Lernreise Kap0.app" \
+            --install-location /Applications \
+            --identifier "de.hvh-wuppertal.informatik-lernreise-kap0" \
+            --version "${VER}" \
+            "macos_out/informatik-lernreise-kap0-v${VER}-macos.pkg"
+
+      - name: macOS Native-Artefakte hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos-native
+          path: macos_out/*
+
+  build-windows-setup:
+    name: Windows Installer (.exe) bauen
+    needs: version-and-changelog
+    runs-on: windows-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version-and-changelog.outputs.version }}
+
+      - name: Python 3.12 einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Inno Setup Compiler prüfen und Setup.exe bauen
+        shell: pwsh
+        env:
+          VER: ${{ needs.version-and-changelog.outputs.version }}
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (Test-Path $iscc) {
+            New-Item -ItemType Directory -Force -Path "dist\v$env:VER" | Out-Null
+            & $iscc "packaging\windows\installer.iss"
+          } else {
+            Write-Warning "ISCC.exe nicht verfügbar, überspringe .exe-Setup."
+          }
+
+      - name: Windows Setup hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows-setup
+          path: dist/v${{ needs.version-and-changelog.outputs.version }}/*.exe
+          if-no-files-found: ignore
+
+  publish-release:
+    name: GitHub Release veröffentlichen
+    needs:
+      - version-and-changelog
+      - build-linux-and-cross
+      - build-macos-native
+      - build-windows-setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.version-and-changelog.outputs.version }}
+
+      - name: Alle Build-Artefakte einsammeln
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          merge-multiple: true
+
+      - name: SHA256SUMS.txt für alle Assets aktualisieren & Release Notes extrahieren
+        env:
+          VER: ${{ needs.version-and-changelog.outputs.version }}
+        run: |
+          python scripts/release_manager.py --action release-notes --version "${VER}" > RELEASE_NOTES.md
+          (
+            cd release_assets
+            rm -f SHA256SUMS.txt
+            sha256sum * > SHA256SUMS.txt
+          )
+          ls -lh release_assets
+
+      - name: GitHub Release erstellen
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: Informatik Lernreise Kapitel 0 ${{ steps.meta.outputs.tag }}
+          tag_name: v${{ needs.version-and-changelog.outputs.version }}
+          name: Informatik Lernreise Kapitel 0 v${{ needs.version-and-changelog.outputs.version }}
           body_path: RELEASE_NOTES.md
-          prerelease: ${{ startsWith(steps.meta.outputs.version, '0.') }}
+          prerelease: ${{ startsWith(needs.version-and-changelog.outputs.version, '0.') }}
+          files: release_assets/*

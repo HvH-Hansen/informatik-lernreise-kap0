@@ -1,0 +1,46 @@
+# Maintainer: HvH-Hansen <https://github.com/HvH-Hansen/informatik-lernreise-kap0>
+pkgname=informatik-lernreise-kap0
+pkgver=0.4.0
+pkgrel=1
+pkgdesc="Interaktive Informatik-Lernreise Kapitel 0 (Klasse 5/6) mit optionaler Google-Sheets-Auswertung"
+arch=('any')
+url="https://github.com/HvH-Hansen/informatik-lernreise-kap0"
+license=('MIT')
+optdepends=('python: Lokaler Webserver für optimale Cloud-Sync-Unterstützung')
+backup=('opt/informatik-lernreise-kap0/config.js')
+source=("informatik-lernreise-kap0-v${pkgver}-source.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/informatik-lernreise-kap0-v${pkgver}"
+  install -dm755 "${pkgdir}/opt/${pkgname}/scripts"
+  cp -a VERSION LICENSE NOTICE README.md CHANGELOG.md \
+    ANLEITUNG_Kollegium_Einrichtung.md ANLEITUNG_Google_Sheets_Anbindung.md \
+    index.html config.example.js Start_Lernreise.command \
+    google_apps_script assets "${pkgdir}/opt/${pkgname}/"
+  cp -a scripts/serve_local.py "${pkgdir}/opt/${pkgname}/scripts/"
+  cp config.example.js "${pkgdir}/opt/${pkgname}/config.js"
+
+  install -dm755 "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/${pkgname}" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+APP_DIR="/opt/informatik-lernreise-kap0"
+cd "$APP_DIR"
+for cand in python3 python; do
+  if command -v "$cand" >/dev/null 2>&1; then
+    if "$cand" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)" >/dev/null 2>&1; then
+      exec "$cand" "$APP_DIR/scripts/serve_local.py" --open-browser "$@"
+    fi
+  fi
+done
+exec xdg-open "$APP_DIR/index.html"
+EOF
+  chmod 755 "${pkgdir}/usr/bin/${pkgname}"
+
+  install -Dm644 packaging/linux/informatik-lernreise-kap0.desktop \
+    "${pkgdir}/usr/share/applications/${pkgname}.desktop"
+  install -Dm644 assets/icon.svg \
+    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

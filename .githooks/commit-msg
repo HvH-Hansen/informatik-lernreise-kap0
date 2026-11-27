@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Automatisches Versions-Inkrement & Changelog-Update pro Commit
+set -e
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PY=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+  PY=".venv/bin/python"
+elif command -v py >/dev/null 2>&1 && py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)" >/dev/null 2>&1; then
+  PY="py -3"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)" >/dev/null 2>&1; then
+  PY="python3"
+elif command -v python >/dev/null 2>&1 && python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 8) else 1)" >/dev/null 2>&1; then
+  PY="python"
+else
+  echo "[Lernreise Release-Hook] Kein Python gefunden – überspringe lokalen Versions-Bump (CI übernimmt beim Push)." >&2
+  exit 0
+fi
+
+$PY scripts/release_manager.py --action bump --message-file "$1" --stage
